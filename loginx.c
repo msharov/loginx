@@ -42,7 +42,8 @@ static void OnSignal (int s)
     if (!s_DoubleSignal) {
 	s_DoubleSignal = true;
 	alarm(1);
-	psignal (s, "[S] Error");
+	if (s != SIGTERM)
+	    syslog (LOG_ERR, "exiting on signal %s", strsignal(s));
 	exit (s+qc_ShellSignalQuitOffset);
     }
     _exit (s+qc_ShellSignalQuitOffset);
