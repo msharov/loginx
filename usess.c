@@ -23,6 +23,8 @@ static pid_t LaunchShell (const struct account* acct, const char* arg);
 static bool _quitting = false;
 static bool _xready = false;
 static int _killsig = SIGTERM;
+static pid_t _shellpid = 0;
+static pid_t _xpid = 0;
 
 //----------------------------------------------------------------------
 
@@ -33,16 +35,15 @@ void RunSession (const struct account* acct)
     // Check if need to launch X
     char xinitrcPath [PATH_MAX];
     snprintf (xinitrcPath, sizeof(xinitrcPath), "%s/.xinitrc", acct->dir);
-    pid_t xpid = 0;
     if (0 == access (xinitrcPath, R_OK))
-	xpid = LaunchX (acct);
+	_xpid = LaunchX (acct);
 
     // Launch login shell; with .xinitrc if X is running
-    pid_t shellpid = LaunchShell (acct, xpid ? ".xinitrc" : NULL);
-    if (!shellpid)
+    _shellpid = LaunchShell (acct, _xpid ? ".xinitrc" : NULL);
+    if (!_shellpid)
 	return;
 
-    WriteUtmp (acct, shellpid, USER_PROCESS);
+    WriteUtmp (acct, _shellpid, USER_PROCESS);
 
     // Set session signal handlers that quit
     typedef void (*psigfunc_t)(int);
@@ -55,35 +56,24 @@ void RunSession (const struct account* acct)
     sigset_t smask;
     sigprocmask (SIG_UNBLOCK, NULL, &smask);
 
-    while (shellpid || xpid) {
+    while (_shellpid || _xpid) {
 	sigsuspend (&smask);
-	int chldstat = 0;
-	pid_t cpid = waitpid (-1, &chldstat, WNOHANG);
-	if (cpid == shellpid || cpid == xpid) {
-	    if (cpid == shellpid)
-		shellpid = 0;
-	    else if (cpid == xpid)
-		xpid = 0;
-	    _quitting = true;
-	    alarm (KILL_TIMEOUT);
-	}
 	if (_quitting) {
-	    if (shellpid)
-		kill (shellpid, _killsig);
-	    if (xpid)
-		kill (xpid, _killsig);
+	    if (_shellpid)
+		kill (_shellpid, _killsig);
+	    if (_xpid)
+		kill (_xpid, _killsig);
 	}
     }
 
     // Restore main signal handlers
-    signal (SIGCHLD, SIG_IGN);
     signal (SIGALRM, alrmsig);
     signal (SIGQUIT, termsig);
     signal (SIGTERM, quitsig);
     signal (SIGHUP, hupsig);
     alarm (0);
 
-    WriteUtmp (acct, shellpid, DEAD_PROCESS);
+    WriteUtmp (acct, _shellpid, DEAD_PROCESS);
     // Leave the user directory to allow it to be unmounted, if it is remote
     chdir ("/");
 }
@@ -109,6 +99,16 @@ static void XreadySignal (int sig __attribute__((unused)))
 
 static void ChildSignal (int sig __attribute__((unused)))
 {
+    int chldstat = 0;
+    pid_t cpid = waitpid (-1, &chldstat, WNOHANG);
+    if ((cpid == _shellpid || cpid == _xpid) && (WIFEXITED(chldstat) || WIFSIGNALED(chldstat))) {
+	if (cpid == _shellpid)
+	    _shellpid = 0;
+	else if (cpid == _xpid)
+	    _xpid = 0;
+	_quitting = true;
+	alarm (KILL_TIMEOUT);
+    }
 }
 
 static void SetupUserResources (const struct account* acct)
