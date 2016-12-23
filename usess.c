@@ -11,8 +11,9 @@ static void QuitSignal (int sig);
 static void AlarmSignal (int sig);
 static void XreadySignal (int sig);
 static void ChildSignal (int sig);
+static void SetupUserResources (const struct account* acct);
 static void BecomeUser (const struct account* acct);
-static void RedirectToLog (void);
+static void RedirectToLog (const struct account* acct);
 static void WriteMotd (const struct account* acct);
 static pid_t LaunchX (const struct account* acct);
 static pid_t LaunchShell (const struct account* acct, const char* arg);
@@ -27,13 +28,16 @@ static int _killsig = SIGTERM;
 
 void RunSession (const struct account* acct)
 {
+    SetupUserResources (acct);
+
     // Check if need to launch X
     char xinitrcPath [PATH_MAX];
     snprintf (xinitrcPath, sizeof(xinitrcPath), "%s/.xinitrc", acct->dir);
-
     pid_t xpid = 0;
     if (0 == access (xinitrcPath, R_OK))
 	xpid = LaunchX (acct);
+
+    // Launch login shell; with .xinitrc if X is running
     pid_t shellpid = LaunchShell (acct, xpid ? ".xinitrc" : NULL);
     if (!shellpid)
 	return;
@@ -107,6 +111,14 @@ static void ChildSignal (int sig __attribute__((unused)))
 {
 }
 
+static void SetupUserResources (const struct account* acct)
+{
+    char usertmpdir [PATH_MAX];
+    snprintf (usertmpdir, sizeof(usertmpdir), _PATH_TMP "%s", acct->name);
+    mkdir (usertmpdir, 0700);
+    chown (usertmpdir, acct->uid, acct->gid);
+}
+
 static void BecomeUser (const struct account* acct)
 {
     if (0 != setgid (acct->gid))
@@ -125,12 +137,15 @@ static void BecomeUser (const struct account* acct)
 	perror ("chdir");
 }
 
-static void RedirectToLog (void)
+static void RedirectToLog (const struct account* acct)
 {
     close (STDIN_FILENO);
     if (STDIN_FILENO != open (_PATH_DEVNULL, O_RDONLY))
 	return;
-    int fd = open (PATH_SESSION_LOG, O_WRONLY| O_CREAT| O_APPEND, 0600);
+
+    char logname [PATH_MAX];
+    snprintf (logname, sizeof(logname), _PATH_TMP "%s/xsession-errors", acct->name);
+    int fd = open (logname, O_WRONLY| O_CREAT| O_APPEND, 0600);
     if (fd < 0)
 	return;
     dup2 (fd, STDOUT_FILENO);
@@ -178,8 +193,7 @@ static pid_t LaunchX (const struct account* acct)
     } else if (pid < 0)
 	ExitWithError ("fork");
     BecomeUser (acct);
-    unlink (PATH_SESSION_LOG);
-    RedirectToLog();
+    RedirectToLog (acct);
 
     signal (SIGTTIN, SIG_IGN);	// Ignore server reads and writes
     signal (SIGTTOU, SIG_IGN);
@@ -209,7 +223,7 @@ static pid_t LaunchShell (const struct account* acct, const char* arg)
 	char xauthpath [PATH_MAX];
 	snprintf (xauthpath, sizeof(xauthpath), "%s/.config/Xauthority", acct->dir);
 	setenv ("XAUTHORITY", xauthpath, true);
-	RedirectToLog();
+	RedirectToLog (acct);
     }
     WriteMotd (acct);
 

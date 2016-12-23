@@ -20,9 +20,6 @@
 #define PASSWORD_PROMPT		"Password:"
 #define PASSWORD_MASKSTR	"***************"
 
-// Define to the location of the session log file when using X
-#define PATH_SESSION_LOG	".cache/xsession-errors"
-
 // Time in seconds to wait between SIGTERM and SIGKILL
 #define KILL_TIMEOUT		1
 
