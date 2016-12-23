@@ -27,7 +27,7 @@ HEADERS="security/pam_appl.h ncurses.h"
 LIBS="pam ncurses"
 
 # First pair is used if nothing matches
-PROGS="CC=gcc CXX=g++ LD=ld AR=ar RANLIB=ranlib RANLIB=touch INSTALL=install DOXYGEN=doxygen"
+PROGS="CC=gcc LD=ld INSTALL=install"
 
 # Automatic vars
 [ -d .git ] && PKG_VERSTR=`git describe --always`
@@ -41,7 +41,6 @@ PKG_BUGREPORT="$MNT_NAME <$MNT_MAIL>"
 CUSTSUBS="s/@PKG_NAME@/$PKG_NAME/g
 s/@PKG_VERSION@/"0x$PKG_MAJOR${PKG_MINOR}"/g
 s/@PKG_VERSTR@/$PKG_VERSTR/g
-s/@PKG_TARNAME@/$PKG_NAME/g
 s/@PKG_STRING@/$PKG_STRING/g
 s/@PKG_UNAME@/`echo $PKG_NAME|tr a-z A-Z`/g
 s/@PKG_BUGREPORT@/$PKG_BUGREPORT/g
@@ -57,7 +56,7 @@ die() { rm -f config.sed config.cpu config.cpu.c; exit; }
 #### Compile the configurator and generate initial config.sed ########
 
 if [ -z "$CC" ]; then
-    for i in gcc g++ cc c++ c89 c99; do
+    for i in gcc clang cc; do
 	CC=`which $i 2>/dev/null` && break
     done
 fi
@@ -68,52 +67,6 @@ PSTDDEF=`echo "#include <stddef.h>"|$CC -E -|grep stddef.h|head -n1|cut -d' ' -f
 PINCDIR=`dirname $PSTDDEF`
 PLIBDIR=`dirname $PINCDIR`
 if [ -d $PLIBDIR/lib ]; then PLIBDIR=$PLIBDIR/lib; fi
-
-# Create and build the C configurator
-cat>config.cpu.c<<\SRC
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/param.h>
-
-#define SET(c,v) "s/#undef \\(" #c "\\)/#define \\1 " #v "/g\n"
-
-int main (void)
-{
-    static const short bov=1;
-    static const char boNames[2][8]={"BIG","LITTLE"};
-    printf ("s/ \\?@INLINE_OPTS@/"
-#if __GNUC__ >= 4
-    " -fvisibility-inlines-hidden -fno-threadsafe-statics -fno-enforce-eh-specs"
-#endif
-    "/g\n");
-#if __GNUC__ || defined(__GLIBC_HAVE_LONG_LONG)
-    printf (SET(HAVE_LONG_LONG,1) SET(SIZE_OF_LONG_LONG,%zd), sizeof(long long));
-#endif
-#if __GNUC__ || __WORDSIZE == 64
-#ifndef BSD
-    printf (SET(HAVE_INT64_T,1));
-#endif
-#endif
-#ifndef __APPLE__
-    if (sizeof(size_t) == sizeof(unsigned long) && sizeof(size_t) != sizeof(uint))
-#endif
-	printf (SET(SIZE_T_IS_LONG,1));
-    printf ("s/@BYTE_ORDER@/%s_ENDIAN/g\n"
-	SET(SIZE_OF_CHAR,%zd)
-	SET(SIZE_OF_SHORT,%zd)
-	SET(SIZE_OF_INT,%zd)
-	SET(SIZE_OF_LONG,%zd)
-	SET(SIZE_OF_POINTER,%zd)
-	SET(SIZE_OF_SIZE_T,%zd),
-	boNames [(uint)(*((const char*)&bov))],
-	sizeof(char), sizeof(short), sizeof(int),
-	sizeof(long), sizeof(void*), sizeof(size_t));
-    return (0);
-}
-SRC
-$CC -o config.cpu config.cpu.c
-[ ! -x config.cpu ] && echo "Configurator build failed" && die
-./config.cpu > config.sed
 
 #### Set host-dependent options ######################################
 
@@ -127,15 +80,13 @@ esac
 
 if [ "$SYSNAME" = "sun" ]; then
     echo "s/-Wredundant-decls/-Wno-redundant-decls/g
-	s/@SHBLDFL@/-G/g" >>config.sed
-else
-    echo 's/#undef \(HAVE_THREE_CHAR_TYPES\)/#define \1 1/g' >>config.sed
+	s/@SHBLDFL@/-G/g" >config.sed
 fi
 if [ "$SYSNAME" = "bsd" ]; then
     echo 's/-Wredundant-decls/-Wno-redundant-decls/g
-	s/-Winline/-Wno-inline/g
-	s/#define HAVE_VA_COPY 1/#undef HAVE_VA_COPY/g' >>config.sed
+	s/-Winline/-Wno-inline/g' >>config.sed
 fi
+[ "$SYSNAME" = "linux" ] || echo 's/-p --ignore-fail-on-non-empty//g' >>config.sed
 if [ "$SYSNAME" = "linux" -o "$SYSNAME" = "bsd" ]; then
     echo 's/@SHBLDFL@/-shared -Wl,-soname=$1/g' >>config.sed
 fi
@@ -148,11 +99,6 @@ if [ "$SYSNAME" = "mac" ]; then
 	s/@SHBLDFL@/-Wl,-single_module -compatibility_version 1 -current_version 1 -install_name $1 -Wl,-Y,1455 -dynamiclib -mmacosx-version-min=10.4/g' >>config.sed
 else
     echo 's/ \?@SYSWARNS@//g' >>config.sed
-fi
-if [ "$SYSNAME" = "mac" ]; then
-    echo 's/#undef \(SIZE_OF_BOOL\)/#define \1 SIZE_OF_LONG/g' >>config.sed
-else
-    echo 's/#undef \(SIZE_OF_BOOL\)/#define \1 SIZE_OF_CHAR/g' >>config.sed
 fi
 
 #### Printing helper functions #######################################
@@ -190,10 +136,7 @@ Installation directories:
   --libdir=DIR		libraries [PREFIX/lib]
   --infodir=DIR		info docs [PREFIX/info]
   --mandir=DIR		man pages [PREFIX/man]
-
-System types:
-  --build=BUILD		compiling on BUILD [guessed]
-  --host=HOST		compiling for HOST [BUILD]
+  --builddir=DIR	location for compiled objects [/tmp/$USER/make]
 "
     PrintComponents
     echo "Report bugs to $PKG_BUGREPORT."
@@ -246,6 +189,7 @@ s/@docdir@/${ac_var_docdir:=$ac_var_datarootdir\/doc\/$PKG_NAME}/g
 s/@infodir@/$ac_var_datarootdir\/info/g
 s/@libdir@/${ac_var_libdir:=$ac_var_prefix\/lib}/g
 s/@mandir@/$ac_var_datarootdir\/man/g
+s/@builddir@/\/tmp\/$USER\/make/g
 s/@gccincludedir@/${ac_var_gccincludedir:=`echo $PINCDIR | sed 's/\//\\\&/g'`}/g
 s/@gcclibdir@/${ac_var_gcclibdir:=`echo $PLIBDIR | sed 's/\//\\\&/g'`}/g
 s/@customincdir@/${ac_var_customincdir:=$ac_var_prefix\/include}/g
@@ -263,7 +207,7 @@ fi
 
 SubHeadLibsProgs() {
 local INCPATH LIBPATH LIBSUFFIX found pname pcall esciv
-INCPATH="$ac_var_includedir $ac_var_gccincludedir $ac_var_customincdir"
+INCPATH="$ac_var_includedir $ac_var_gccincludedir $ac_var_customincdir /usr/include"
 INCPATH=`echo $INCPATH | sed 's/\\\\//g'`
 for i in $HEADERS; do
     for p in $INCPATH; do
@@ -294,6 +238,10 @@ done
 for i in $PROGS; do
     pname=`expr "$i" : '\([^=]*\)=[^=]*'`
     pcall=`expr "$i" : '[^=]*=\([^=]*\)'`
+    esciv="`eval echo \$\{$pname\}|sed 's/\//\\\\\//g'`"
+    # First check if an environment variable is set
+    [ ! -z "$esciv" ] && echo "s/@$pname@/$esciv/g" >>config.sed
+    # Check if the program exists
     [ -x `which $pcall 2>/dev/null` ] && echo "s/@$pname@/$pcall/g" >>config.sed
 done
 # If nothing found in first loop, set the first pair anyway.
@@ -302,6 +250,7 @@ for i in $PROGS; do
     pcall=`expr "$i" : '[^=]*=\([^=]*\)'`
     echo "s/@$pname@/$pcall/g" >>config.sed
 done
+
 # And, finally, the environment variables
 for i in $ENVIRONS; do
     esciv="`eval echo '"'\$\{$i\}'"'|sed 's/\//\\\&/g'`"

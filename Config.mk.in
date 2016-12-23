@@ -14,6 +14,7 @@ INSTALL		:= @INSTALL@
 
 INSTALLEXE	:= ${INSTALL} -D -p -m 700 -o root -g root -s
 INSTALLDATA	:= ${INSTALL} -D -p -m 644 -o root -g root
+RMPATH		:= rmdir -p --ignore-fail-on-non-empty
 
 ################ Destination #########################################
 
@@ -35,4 +36,5 @@ else
     CFLAGS	+= -Os -g0 -DNDEBUG=1
     LDFLAGS	+= -s -Wl,-O1,-gc-sections
 endif
+BUILDDIR	:= @builddir@/${NAME}
 O		:= .o/

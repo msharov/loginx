@@ -2,19 +2,18 @@
 
 ################ Source files ##########################################
 
-EXE	:= ${NAME}
+EXE	:= $O${NAME}
 SRCS	:= $(wildcard *.c)
 OBJS	:= $(addprefix $O,$(SRCS:.c=.o))
 DEPS	:= ${OBJS:.o=.d}
+CONFS	:= Config.mk config.h
+ONAME   := $(notdir $(abspath $O))
 
 ################ Compilation ###########################################
 
 .PHONY: all clean distclean maintainer-clean
 
-all:	Config.mk config.h ${EXE} ${DATAF}
-
-run:	${EXE} ${DATAF}
-	@./${EXE}
+all:	Config.mk config.h ${EXE}
 
 ${EXE}:	${OBJS}
 	@echo "Linking $@ ..."
@@ -34,7 +33,7 @@ $O%.o:	%.c
 .PHONY:	install uninstall
 
 ifdef BINDIR
-EXEI	:= $(addprefix ${BINDIR}/,${EXE})
+EXEI	:= ${BINDIR}/$(notdir ${EXE})
 PAMCNFI	:= ${PAMDIR}/${EXE}
 SYSDCFI	:= ${SYSDDIR}/${EXE}@.service
 MANI	:= ${MANDIR}/man1/${EXE}.1.gz
@@ -66,21 +65,29 @@ endif
 ################ Maintenance ###########################################
 
 clean:
-	@if [ -d $O ]; then\
-	    rm -f ${EXE} ${OBJS} ${DEPS};\
-	    rmdir $O;\
+	@if [ -h ${ONAME} ]; then\
+	    rm -f ${EXE} ${OBJS} ${DEPS} $O.d ${ONAME};\
+	    ${RMPATH} ${BUILDDIR};\
 	fi
 
 distclean:	clean
-	@rm -f Config.mk config.h config.status
+	@rm -f ${CONFS} config.status
 
 maintainer-clean: distclean
 
-${OBJS}:		Makefile Config.mk config.h
-Config.mk:		Config.mk.in
-config.h:		config.h.in
-Config.mk config.h:	configure
-	@if [ -x config.status ]; then echo "Reconfiguring ..."; ./config.status; \
-	else echo "Running configure ..."; ./configure; fi
+$O.d:   ${BUILDDIR}/.d
+	@[ -h ${ONAME} ] || ln -sf ${BUILDDIR} ${ONAME}
+${BUILDDIR}/.d:     Makefile
+	@mkdir -p ${BUILDDIR} && touch ${BUILDDIR}/.d
+
+Config.mk:	Config.mk.in
+config.h:	config.h.in
+${OBJS}:	Makefile ${CONFS} $O.d
+${CONFS}:	configure
+	@if [ -x config.status ]; then\
+	    echo "Reconfiguring ..."; ./config.status;\
+	else\
+	    echo "Running configure ..."; ./configure;\
+	fi
 
 -include ${DEPS}
