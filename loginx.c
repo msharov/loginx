@@ -67,7 +67,7 @@ void* xmalloc (size_t n)
 	puts ("Error: out of memory");
 	exit (EXIT_FAILURE);
     }
-    return (p);
+    return p;
 }
 
 void xfree (void* p)
@@ -113,7 +113,7 @@ int main (int argc, const char* const* argv)
     bool loginok = PamLogin (al[ali], password);
     memset (password, 0, sizeof(password));
     if (!loginok)
-	return (EXIT_FAILURE);
+	return EXIT_FAILURE;
 
     WriteLastlog (al[ali]);
     WriteUtmp (al[ali], getpid(), LOGIN_PROCESS);
@@ -128,7 +128,7 @@ int main (int argc, const char* const* argv)
     PamLogout();
     PamClose();
     ResetTerminal();
-    return (EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 
 static void InitEnvironment (void)
@@ -163,7 +163,7 @@ static int OpenTTYFd (void)
     if (getpgid(0) != tcgetsid(fd))
 	if (ioctl (fd, TIOCSCTTY, 1) < 0)
 	    ExitWithError ("failed to take tty control");
-    return (fd);
+    return fd;
 }
 
 static void OpenTTY (void)

@@ -99,7 +99,7 @@ unsigned LoginBox (acclist_t al, char* password)
     delwin (_loginbox);
     CursesCleanup();
 
-    return (ali);
+    return ali;
 }
 
 void ClearScreen (void)

@@ -29,7 +29,7 @@ static void CleanupAccounts (void)
 
 static bool CanLogin (const struct passwd* pw)
 {
-    return (pw->pw_shell && strcmp(pw->pw_shell, "/bin/false") && strcmp(pw->pw_shell,"/sbin/nologin"));
+    return pw->pw_shell && strcmp(pw->pw_shell, "/bin/false") && strcmp(pw->pw_shell,"/sbin/nologin");
 }
 
 acclist_t ReadAccounts (void)
@@ -61,12 +61,12 @@ acclist_t ReadAccounts (void)
     }
     endpwent();
     _naccts = nac;
-    return ((acclist_t) _accts);
+    return (acclist_t) _accts;
 }
 
 unsigned NAccounts (void)
 {
-    return (_naccts);
+    return _naccts;
 }
 
 void ReadLastlog (void)

@@ -20,11 +20,9 @@ static pid_t LaunchShell (const struct account* acct, const char* arg);
 
 //----------------------------------------------------------------------
 
-static bool _quitting = false;
-static bool _xready = false;
+static bool _quitting = false, _xready = false;
 static int _killsig = SIGTERM;
-static pid_t _shellpid = 0;
-static pid_t _xpid = 0;
+static pid_t _shellpid = 0, _xpid = 0;
 
 //----------------------------------------------------------------------
 
@@ -42,20 +40,20 @@ void RunSession (const struct account* acct)
     _shellpid = LaunchShell (acct, _xpid ? ".xinitrc" : NULL);
     if (!_shellpid)
 	return;
-
     WriteUtmp (acct, _shellpid, USER_PROCESS);
 
     // Set session signal handlers that quit
     typedef void (*psigfunc_t)(int);
-    psigfunc_t hupsig = signal (SIGHUP, QuitSignal);
-    psigfunc_t termsig = signal (SIGTERM, QuitSignal);
-    psigfunc_t quitsig = signal (SIGQUIT, QuitSignal);
-    psigfunc_t alrmsig = signal (SIGALRM, AlarmSignal);
+    psigfunc_t hupsig = signal (SIGHUP, QuitSignal),
+	    termsig = signal (SIGTERM, QuitSignal),
+	    quitsig = signal (SIGQUIT, QuitSignal),
+	    alrmsig = signal (SIGALRM, AlarmSignal);
     signal (SIGCHLD, ChildSignal);
 
     sigset_t smask;
     sigprocmask (SIG_UNBLOCK, NULL, &smask);
 
+    // Wait until the child processes quit or the term signal
     while (_shellpid || _xpid) {
 	sigsuspend (&smask);
 	if (_quitting) {
@@ -66,16 +64,15 @@ void RunSession (const struct account* acct)
 	}
     }
 
-    // Restore main signal handlers
+    // Logout complete, note that shell is dead in utmp
+    WriteUtmp (acct, _shellpid, DEAD_PROCESS);
+
+    // Restore main signal handlers and cancel timeout, if any
     signal (SIGALRM, alrmsig);
+    signal (SIGHUP, hupsig);
     signal (SIGQUIT, termsig);
     signal (SIGTERM, quitsig);
-    signal (SIGHUP, hupsig);
     alarm (0);
-
-    WriteUtmp (acct, _shellpid, DEAD_PROCESS);
-    // Leave the user directory to allow it to be unmounted, if it is remote
-    chdir ("/");
 }
 
 static void QuitSignal (int sig)
@@ -185,13 +182,15 @@ static pid_t LaunchX (const struct account* acct)
 	    sigsuspend (&orig);	// Wait for SIGUSR1 from X before returning
 	    int ecode, rc = waitpid (pid, &ecode, WNOHANG);
 	    if (rc || errno != EINTR)
-		return (0);	// X failed to start, fallback to plain shell
+		return 0;	// X failed to start, fallback to plain shell
 	    else if (_xready)
 		break;
 	}
-	return (pid);
+	return pid;
     } else if (pid < 0)
 	ExitWithError ("fork");
+
+    // Child process; change to user and exec the X
     BecomeUser (acct);
     RedirectToLog (acct);
 
@@ -213,11 +212,12 @@ static pid_t LaunchShell (const struct account* acct, const char* arg)
 {
     pid_t pid = fork();
     if (pid > 0)
-	return (pid);
+	return pid;
     else if (pid < 0)
 	ExitWithError ("fork");
-    BecomeUser (acct);
 
+    // Child process; change to user and exec the login shell
+    BecomeUser (acct);
     if (arg) {	// If launching xinitrc, set DISPLAY
 	setenv ("DISPLAY", ":0", true);
 	char xauthpath [PATH_MAX];
@@ -228,7 +228,7 @@ static pid_t LaunchShell (const struct account* acct, const char* arg)
     WriteMotd (acct);
 
     char shname [16];	// argv[0] of a login shell is "-bash"
-    const char* shbasename = strrchr(acct->shell, '/');
+    const char* shbasename = strrchr (acct->shell, '/');
     if (!shbasename++)
 	shbasename = acct->shell;
     snprintf (shname, sizeof(shname), "-%s", shbasename);

@@ -78,12 +78,12 @@ bool PamLogin (const struct account* acct, const char* password)
     pam_get_item (_pamh, PAM_USER, (const void**) &_username);
     _password = NULL;
     if (!_username || 0 != strcmp (_username, acct->name))
-	return (false);
+	return false;
 
     // Give ownership of the tty
     fchown (STDIN_FILENO, acct->uid, _ttygroup ? _ttygroup : acct->gid);
     fchmod (STDIN_FILENO, 0620);
-    return (true);
+    return true;
 }
 
 void PamLogout (void)
@@ -103,11 +103,11 @@ void PamLogout (void)
 static int xconv (int num_msg, const struct pam_message** msgm, struct pam_response** response, void* appdata_ptr __attribute__((unused)))
 {
     if (num_msg <= 0)
-	return (PAM_CONV_ERR);
+	return PAM_CONV_ERR;
 
     struct pam_response* reply = (struct pam_response*) calloc (num_msg, sizeof(struct pam_response));
     if (!reply)
-	return (PAM_CONV_ERR);
+	return PAM_CONV_ERR;
 
     for (int i = 0; i < num_msg; ++i) {
 	switch (msgm[i]->msg_style) {
@@ -132,9 +132,9 @@ static int xconv (int num_msg, const struct pam_message** msgm, struct pam_respo
 		}
 		free(reply);
 		syslog (LOG_ERR, "unhandled PAM conversation style %d: %s", msgm[i]->msg_style, msgm[i]->msg);
-		return (PAM_CONV_ERR);
+		return PAM_CONV_ERR;
 	}
     }
     *response = reply;
-    return (PAM_SUCCESS);
+    return PAM_SUCCESS;
 }
