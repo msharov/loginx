@@ -30,6 +30,14 @@ void RunSession (const struct account* acct)
 {
     SetupUserResources (acct);
 
+    // Set session signal handlers that quit
+    typedef void (*psigfunc_t)(int);
+    psigfunc_t hupsig = signal (SIGHUP, QuitSignal),
+	    termsig = signal (SIGTERM, QuitSignal),
+	    quitsig = signal (SIGQUIT, QuitSignal),
+	    alrmsig = signal (SIGALRM, AlarmSignal);
+    signal (SIGCHLD, ChildSignal);
+
     // Check if need to launch X
     char xinitrcPath [PATH_MAX];
     snprintf (xinitrcPath, sizeof(xinitrcPath), "%s/.xinitrc", acct->dir);
@@ -41,14 +49,6 @@ void RunSession (const struct account* acct)
     if (!_shellpid)
 	return;
     WriteUtmp (acct, _shellpid, USER_PROCESS);
-
-    // Set session signal handlers that quit
-    typedef void (*psigfunc_t)(int);
-    psigfunc_t hupsig = signal (SIGHUP, QuitSignal),
-	    termsig = signal (SIGTERM, QuitSignal),
-	    quitsig = signal (SIGQUIT, QuitSignal),
-	    alrmsig = signal (SIGALRM, AlarmSignal);
-    signal (SIGCHLD, ChildSignal);
 
     sigset_t smask;
     sigprocmask (SIG_UNBLOCK, NULL, &smask);
@@ -181,7 +181,7 @@ static pid_t LaunchX (const struct account* acct)
 	for (;;) {
 	    sigsuspend (&orig);	// Wait for SIGUSR1 from X before returning
 	    int ecode, rc = waitpid (pid, &ecode, WNOHANG);
-	    if (rc || errno != EINTR)
+	    if (rc || errno != EINTR || WIFEXITED(ecode))
 		return 0;	// X failed to start, fallback to plain shell
 	    else if (_xready)
 		break;
