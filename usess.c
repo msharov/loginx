@@ -1,6 +1,8 @@
 #include "defs.h"
 #include <sys/sendfile.h>
+#include <arpa/inet.h>
 #include <sys/wait.h>
+#include <stdint.h>
 #include <fcntl.h>
 #include <time.h>
 #include <utmp.h>
@@ -13,8 +15,10 @@ static void XreadySignal (int sig);
 static void ChildSignal (int sig);
 static void SetupUserResources (const struct account* acct);
 static void BecomeUser (const struct account* acct);
-static void RedirectToLog (const struct account* acct);
+static void RedirectToLog (void);
 static void WriteMotd (const struct account* acct);
+static void GenerateMCookie (uint8_t* cbuf);
+static void WriteXauthority (const char* filename, unsigned dpy, const uint8_t* mcookie);
 static pid_t LaunchX (const struct account* acct);
 static pid_t LaunchShell (const struct account* acct, const char* arg);
 
@@ -23,6 +27,11 @@ static pid_t LaunchShell (const struct account* acct, const char* arg);
 static bool _quitting = false, _xready = false;
 static int _killsig = SIGTERM;
 static pid_t _shellpid = 0, _xpid = 0;
+static uint8_t _xdisplay = 0;
+static uint8_t _xmcookie [16] = {};
+static char _userrundir [32] = {};
+static char _usertmpdir [32] = {};
+static char _xauthpath [64] = {};
 
 //----------------------------------------------------------------------
 
@@ -110,10 +119,30 @@ static void ChildSignal (int sig __attribute__((unused)))
 
 static void SetupUserResources (const struct account* acct)
 {
-    char usertmpdir [PATH_MAX];
-    snprintf (usertmpdir, sizeof(usertmpdir), _PATH_TMP "%s", acct->name);
-    mkdir (usertmpdir, 0700);
-    chown (usertmpdir, acct->uid, acct->gid);
+    // Create user tmp dir /tmp/user
+    snprintf (_usertmpdir, sizeof(_usertmpdir), _PATH_TMP "%s", acct->name);
+    if (0 != access (_usertmpdir, F_OK)) {
+	mkdir (_usertmpdir, 0700);
+	chown (_usertmpdir, acct->uid, acct->gid);
+    }
+
+    // Create XDG_RUNTIME_DIR in /run/user/uid
+    snprintf (_userrundir, sizeof(_userrundir), "/run/user/%u", acct->uid);
+    if (0 != access (_userrundir, F_OK)) {
+	mkdir ("/run", 0755);
+	mkdir ("/run/user", 0755);
+	mkdir (_userrundir, 0700);
+	chown (_userrundir, acct->uid, acct->gid);
+    }
+
+    // Determine X display to launch
+    _xdisplay = _ttypath[strlen(_ttypath)-1]-'1';
+
+    // Create Xauthority file for the user
+    GenerateMCookie (_xmcookie);
+    snprintf (_xauthpath, sizeof(_xauthpath), "%s/xdpy%u.auth", _userrundir, _xdisplay);
+    WriteXauthority (_xauthpath, _xdisplay, _xmcookie);
+    chown (_xauthpath, acct->uid, acct->gid);
 }
 
 static void BecomeUser (const struct account* acct)
@@ -129,19 +158,21 @@ static void BecomeUser (const struct account* acct)
     setenv ("USER", acct->name, true);
     setenv ("SHELL", acct->shell, true);
     setenv ("HOME", acct->dir, true);
+    setenv ("TMPDIR", _usertmpdir, true);
+    setenv ("XDG_RUNTIME_DIR", _userrundir, false);
 
     if (0 != chdir (acct->dir))
 	perror ("chdir");
 }
 
-static void RedirectToLog (const struct account* acct)
+static void RedirectToLog (void)
 {
     close (STDIN_FILENO);
     if (STDIN_FILENO != open (_PATH_DEVNULL, O_RDONLY))
 	return;
 
     char logname [PATH_MAX];
-    snprintf (logname, sizeof(logname), _PATH_TMP "%s/xsession-errors", acct->name);
+    snprintf (logname, sizeof(logname), "%s/xsession-errors", _usertmpdir);
     int fd = open (logname, O_WRONLY| O_CREAT| O_APPEND, 0600);
     if (fd < 0)
 	return;
@@ -163,6 +194,53 @@ static void WriteMotd (const struct account* acct)
     const time_t lltime = acct->ltime;
     printf ("Last login: %s\n", ctime(&lltime));
     fflush (stdout);
+}
+
+static void GenerateMCookie (uint8_t* cbuf)
+{
+    uint32_t* cubuf = (uint32_t*) cbuf;
+    for (unsigned i = 0; i < 4; ++i)
+	cubuf[i] = rand();
+}
+
+static void WriteXauthority (const char* filename, unsigned dpy, const uint8_t* mcookie)
+{
+    char host [HOST_NAME_MAX] = {};
+    gethostname (host, sizeof(host));
+    #define AUTH_TYPE	"MIT-MAGIC-COOKIE-1"
+    uint16_t sz;
+    const size_t hostlen = strlen(host),
+		wbufsz = 5*sizeof(sz)+hostlen+1+strlen(AUTH_TYPE)+16;
+    uint8_t wbuf [wbufsz];
+    uint8_t* wp = wbuf;
+    // First field is the address family, AF_LOCAL
+    enum { XauthFamilyLocal = 256 };
+    sz = htons(XauthFamilyLocal);	// All shorts in network byte order
+    wp = mempcpy (wp, &sz, sizeof(sz));
+    // Second is the hostname
+    sz = htons(hostlen);
+    wp = mempcpy (wp, &sz, sizeof(sz));
+    wp = mempcpy (wp, host, hostlen);
+    // Third is the display
+    char dpychar = '0'+dpy;
+    sz = htons(sizeof(dpychar));
+    wp = mempcpy (wp, &sz, sizeof(sz));
+    *wp++ = dpychar;
+    // Fourth is the auth type
+    sz = htons(strlen(AUTH_TYPE));
+    wp = mempcpy (wp, &sz, sizeof(sz));
+    wp = mempcpy (wp, AUTH_TYPE, strlen(AUTH_TYPE));
+    // Fifth is the auth data
+    sz = htons(16);
+    wp = mempcpy (wp, &sz, sizeof(sz));
+    wp = mempcpy (wp, mcookie, 16);
+
+    int fd = open (filename, O_WRONLY| O_CREAT| O_TRUNC, 0600);
+    if (fd >= 0) {
+	size_t bw = write (fd, wbuf, wbufsz);
+	if (0 != close (fd) || bw != wbufsz)
+	    unlink (filename);
+    }
 }
 
 static pid_t LaunchX (const struct account* acct)
@@ -192,16 +270,18 @@ static pid_t LaunchX (const struct account* acct)
 
     // Child process; change to user and exec the X
     BecomeUser (acct);
-    RedirectToLog (acct);
+    RedirectToLog();
+    chdir ("/");
 
     signal (SIGTTIN, SIG_IGN);	// Ignore server reads and writes
     signal (SIGTTOU, SIG_IGN);
     signal (SIGUSR1, SIG_IGN);	// This tells the X server to send SIGUSR1 to parent when ready
     sigprocmask (SIG_SETMASK, &orig, NULL);	// Now unblock SIGUSR1
 
-    char vtname[] = "vt01";
-    vtname[3] = _ttypath[strlen(_ttypath)-1];
-    const char* argv[] = { "X", ":0", vtname, "-quiet", "-nolisten", "tcp", "-auth", ".config/Xauthority", NULL };
+    char dpyname[] = ":0", vtname[] = "vt01";
+    dpyname[1] += _xdisplay;
+    vtname[3] += _xdisplay;
+    const char* argv[] = { "X", dpyname, vtname, "-quiet", "-nolisten", "tcp", "-auth", _xauthpath, NULL };
     if (0 != access (argv[7], R_OK))
 	argv[6] = NULL;
     execvp ("/usr/bin/X", (char* const*) argv);
@@ -219,11 +299,11 @@ static pid_t LaunchShell (const struct account* acct, const char* arg)
     // Child process; change to user and exec the login shell
     BecomeUser (acct);
     if (arg) {	// If launching xinitrc, set DISPLAY
-	setenv ("DISPLAY", ":0", true);
-	char xauthpath [PATH_MAX];
-	snprintf (xauthpath, sizeof(xauthpath), "%s/.config/Xauthority", acct->dir);
-	setenv ("XAUTHORITY", xauthpath, true);
-	RedirectToLog (acct);
+	char display[] = ":0";
+	display[1] += _xdisplay;
+	setenv ("DISPLAY", display, true);
+	setenv ("XAUTHORITY", _xauthpath, true);
+	RedirectToLog();
     }
     WriteMotd (acct);
 

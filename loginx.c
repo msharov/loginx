@@ -88,11 +88,23 @@ void ExitWithMessage (const char* msg)
     exit (EXIT_FAILURE);
 }
 
+// Randomly initializes the random number generator
+static void srandrand (void)
+{
+    struct timespec now;
+    clock_gettime (CLOCK_REALTIME, &now);
+    unsigned seed = now.tv_sec;
+    seed = (seed<<16)|(seed>>16);
+    seed ^= now.tv_nsec;
+    srand (seed);
+}
+
 //}}}-------------------------------------------------------------------
 
 int main (int argc, const char* const* argv)
 {
     InstallCleanupHandlers();
+    srandrand();
 
     openlog (LOGINX_NAME, LOG_ODELAY, LOG_AUTHPRIV);
 
