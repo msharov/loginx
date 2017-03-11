@@ -259,9 +259,10 @@ static pid_t LaunchX (const struct account* acct)
 	for (;;) {
 	    sigsuspend (&orig);	// Wait for SIGUSR1 from X before returning
 	    int ecode, rc = waitpid (pid, &ecode, WNOHANG);
-	    if (rc || errno != EINTR || WIFEXITED(ecode))
-		return 0;	// X failed to start, fallback to plain shell
-	    else if (_xready)
+	    if (rc == pid && WIFEXITED(ecode)) {
+		syslog (LOG_ERR, "X pid %d failed to start, error %d, falling back to plain shell", pid, ecode);
+		return 0;
+	    } else if (_xready)
 		break;
 	}
 	return pid;
