@@ -26,10 +26,10 @@ SYSDDIR		:= @libdir@/systemd/system
 ################ Compiler options ####################################
 
 WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
-CFLAGS		:= ${WARNOPTS} @CUSTOMINCDIR@ -march=native -std=c99 \
+CFLAGS		:= ${WARNOPTS} @CUSTOMINCDIR@ -std=c99 \
 		-ffunction-sections -fdata-sections
 LDFLAGS		:= @CUSTOMLIBDIR@
-LIBS		:= @libpam@ @libncurses@
+LIBS		:= @libpam@ @libncurses@ @libtinfo@
 ifdef DEBUG
     CFLAGS	+= -O0 -g
 else

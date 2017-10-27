@@ -24,7 +24,7 @@ seds=[s/^#\(DEBUG\)/\1/]
 HEADERS="security/pam_appl.h ncurses.h"
 
 # Libraries
-LIBS="pam ncurses"
+LIBS="pam ncurses tinfo"
 
 # First pair is used if nothing matches
 PROGS="CC=gcc LD=ld INSTALL=install"
@@ -51,7 +51,7 @@ s/@PKG_MINOR@/$PKG_MINOR/g"
 # The rest of the file is configuration code. Leave it alone.	     #
 ######################################################################
 
-die() { rm -f config.sed config.cpu config.cpu.c; exit; }
+die() { rm -f config.sed; exit; }
 
 #### Compile the configurator and generate initial config.sed ########
 
@@ -61,12 +61,6 @@ if [ -z "$CC" ]; then
     done
 fi
 [ -z "$CC" ] && "No C compiler found" && die
-
-# Determine gcc private directory
-PSTDDEF=`echo "#include <stddef.h>"|$CC -E -|grep stddef.h|head -n1|cut -d' ' -f3|cut -d'"' -f2`
-PINCDIR=`dirname $PSTDDEF`
-PLIBDIR=`dirname $PINCDIR`
-if [ -d $PLIBDIR/lib ]; then PLIBDIR=$PLIBDIR/lib; fi
 
 #### Set host-dependent options ######################################
 
@@ -79,24 +73,15 @@ case "$SYSNAME" in
 esac
 
 if [ "$SYSNAME" = "sun" ]; then
-    echo "s/-Wredundant-decls/-Wno-redundant-decls/g
-	s/@SHBLDFL@/-G/g" >config.sed
-fi
-if [ "$SYSNAME" = "bsd" ]; then
+    echo "s/-Wredundant-decls/-Wno-redundant-decls/g" >config.sed
+elif [ "$SYSNAME" = "bsd" ]; then
     echo 's/-Wredundant-decls/-Wno-redundant-decls/g
-	s/-Winline/-Wno-inline/g' >>config.sed
-fi
-[ "$SYSNAME" = "linux" ] || echo 's/-p --ignore-fail-on-non-empty//g' >>config.sed
-if [ "$SYSNAME" = "linux" -o "$SYSNAME" = "bsd" ]; then
-    echo 's/@SHBLDFL@/-shared -Wl,-soname=$1/g' >>config.sed
+	s/-Winline/-Wno-inline/g' >config.sed
+elif [ "$SYSNAME" = "linux" ]; then
+    echo 's/-p --ignore-fail-on-non-empty//g' >config.sed
 fi
 if [ "$SYSNAME" = "mac" ]; then
-    echo 's/@SYSWARNS@/-Wno-long-double/g
-	s/lib$1.so/lib$1.dylib/g
-	s/lib$1.so.${MAJOR}.${MINOR}.${BUILD}/lib$1.${MAJOR}.${MINOR}.${BUILD}.dylib/g
-	s/lib$1.so.${MAJOR}.${MINOR}/lib$1.${MAJOR}.${MINOR}.dylib/g
-	s/lib$1.so.${MAJOR}/lib$1.${MAJOR}.dylib/g
-	s/@SHBLDFL@/-Wl,-single_module -compatibility_version 1 -current_version 1 -install_name $1 -Wl,-Y,1455 -dynamiclib -mmacosx-version-min=10.4/g' >>config.sed
+    echo 's/@SYSWARNS@/-Wno-long-double/g'
 else
     echo 's/ \?@SYSWARNS@//g' >>config.sed
 fi
@@ -190,8 +175,6 @@ s/@infodir@/$ac_var_datarootdir\/info/g
 s/@libdir@/${ac_var_libdir:=$ac_var_prefix\/lib}/g
 s/@mandir@/$ac_var_datarootdir\/man/g
 s/@builddir@/\/tmp\/$USER\/make/g
-s/@gccincludedir@/${ac_var_gccincludedir:=`echo $PINCDIR | sed 's/\//\\\&/g'`}/g
-s/@gcclibdir@/${ac_var_gcclibdir:=`echo $PLIBDIR | sed 's/\//\\\&/g'`}/g
 s/@customincdir@/${ac_var_customincdir:=$ac_var_prefix\/include}/g
 s/@customlibdir@/${ac_var_customlibdir:=$ac_var_prefix\/lib}/g" >>config.sed
 
@@ -207,7 +190,7 @@ fi
 
 SubHeadLibsProgs() {
 local INCPATH LIBPATH LIBSUFFIX found pname pcall esciv
-INCPATH="$ac_var_includedir $ac_var_gccincludedir $ac_var_customincdir /usr/include"
+INCPATH="$ac_var_includedir $ac_var_customincdir /usr/include /usr/include/x86_64-linux-gnu"
 INCPATH=`echo $INCPATH | sed 's/\\\\//g'`
 for i in $HEADERS; do
     for p in $INCPATH; do
@@ -218,7 +201,7 @@ for i in $HEADERS; do
     done
 done
 
-LIBPATH="`echo $LD_LIBRARY_PATH | tr ':' ' '` $ac_var_libdir $ac_var_gcclibdir $ac_var_customlibdir /usr/lib /usr/local/lib /lib"
+LIBPATH="`echo $LD_LIBRARY_PATH | tr ':' ' '` $ac_var_libdir $ac_var_customlibdir /usr/lib /usr/local/lib /lib /usr/lib/x86_64-linux-gnu"
 LIBPATH=`echo $LIBPATH | sed 's/\\\\//g'`
 LIBSUFFIX="so a la dylib"
 for i in $LIBS; do
