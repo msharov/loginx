@@ -29,7 +29,7 @@ WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
 CFLAGS		:= ${WARNOPTS} @CUSTOMINCDIR@ -std=c99 \
 		-ffunction-sections -fdata-sections
 LDFLAGS		:= @CUSTOMLIBDIR@
-LIBS		:= @libpam@ @libncurses@ @libtinfo@
+LIBS		:= @libpam@ @libncurses@
 ifdef DEBUG
     CFLAGS	+= -O0 -g
 else

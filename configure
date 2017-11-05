@@ -24,7 +24,7 @@ seds=[s/^#\(DEBUG\)/\1/]
 HEADERS="security/pam_appl.h ncurses.h"
 
 # Libraries
-LIBS="pam ncurses tinfo"
+LIBS="pam ncurses"
 
 # First pair is used if nothing matches
 PROGS="CC=gcc LD=ld INSTALL=install"
@@ -77,7 +77,7 @@ if [ "$SYSNAME" = "sun" ]; then
 elif [ "$SYSNAME" = "bsd" ]; then
     echo 's/-Wredundant-decls/-Wno-redundant-decls/g
 	s/-Winline/-Wno-inline/g' >config.sed
-elif [ "$SYSNAME" = "linux" ]; then
+elif [ ! "$SYSNAME" = "linux" ]; then
     echo 's/-p --ignore-fail-on-non-empty//g' >config.sed
 fi
 if [ "$SYSNAME" = "mac" ]; then
