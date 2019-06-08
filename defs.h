@@ -47,6 +47,7 @@ void PamOpen (void);
 void PamClose (void);
 bool PamLogin (const struct account* acct, const char* password);
 void PamLogout (void);
+const char* PamGetenv (const char* name);
 
 // uacct.c
 acclist_t ReadAccounts (void);

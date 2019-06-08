@@ -160,6 +160,22 @@ static void BecomeUser (const struct account* acct)
     setenv ("HOME", acct->dir, true);
     setenv ("TMPDIR", _usertmpdir, true);
     setenv ("XDG_RUNTIME_DIR", _userrundir, false);
+    char vtnr[2] = {'1'+_xdisplay,0};
+    setenv ("XDG_VTNR", vtnr, false);
+    static const struct { const char *name, *val; } c_Envs[] = {
+	{ "XDG_SEAT", NULL },
+	{ "XDG_SESSION_ID", NULL },
+	{ "XDG_SESSION_TYPE", "tty" },
+	{ "XDG_SESSION_CLASS", "user" },
+	{ "DBUS_SESSION_BUS_ADDRESS", NULL }
+    };
+    for (unsigned i = 0; i < sizeof(c_Envs)/sizeof(c_Envs[0]); ++i) {
+	const char* eval = PamGetenv (c_Envs[i].name);
+	if (!eval)
+	    eval = c_Envs[i].val;
+	if (eval)
+	    setenv (c_Envs[i].name, eval, true);
+    }
 
     if (0 != chdir (acct->dir))
 	perror ("chdir");
@@ -304,6 +320,7 @@ static pid_t LaunchShell (const struct account* acct, const char* arg)
 	display[1] += _xdisplay;
 	setenv ("DISPLAY", display, true);
 	setenv ("XAUTHORITY", _xauthpath, true);
+	setenv ("XDG_SESSION_TYPE", "x11", true);
 	RedirectToLog();
     }
     WriteMotd (acct);

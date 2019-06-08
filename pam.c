@@ -100,6 +100,11 @@ void PamLogout (void)
     _username = NULL;
 }
 
+const char* PamGetenv (const char* name)
+{
+    return pam_getenv (_pamh, name);
+}
+
 static int xconv (int num_msg, const struct pam_message** msgm, struct pam_response** response, void* appdata_ptr __attribute__((unused)))
 {
     if (num_msg <= 0)
