@@ -3,94 +3,60 @@
 # Project Configuration						     #
 ######################################################################
 
-PKG_NAME="loginx"
-PKG_VERSTR="v0.1"
-
-MNT_NAME="Mike Sharov"
-MNT_MAIL="zfunebi@hfref.fbheprsbetr.arg"
+pkg_name="loginx"
+pkg_verstr="v0.2"
+pkg_bugreport="Mike Sharov <msharov@users.sourceforge.net>"
 
 # Files that get created by this script
-FILES="Config.mk config.h"
+files="Config.mk config.h"
 
 # Package options
-COMPONENTS='
+components='
 {
 name=[with-debug]
 desc=[	Compile for debugging]
-seds=[s/^#\(DEBUG\)/\1/]
+seds=[s/^#\(debug\)/\1/]
+}{
+name=[with-native]
+desc=[	Use -march=native]
+seds=[s/ -std=c/ -march=native -std=c/]
 }';
 
-# Header files
-HEADERS="security/pam_appl.h ncurses.h"
-
-# Libraries
-LIBS="pam ncurses"
-
 # First pair is used if nothing matches
-PROGS="CC=gcc LD=ld INSTALL=install"
+progs="CC=gcc CC=clang CC=cc INSTALL=install"
+
+# Required dependencies
+pkgs="ncurses"
 
 # Automatic vars
-[ -d .git ] && PKG_VERSTR=`git describe --always`
-PKG_MAJOR=`expr "$PKG_VERSTR" : 'v\([0-9]*\)\.[0-9]*'`
-PKG_MINOR=`expr "$PKG_VERSTR" : 'v[0-9]*\.\([0-9]*\)'`
-PKG_STRING="$PKG_NAME $PKG_VERSTR"
-MNT_MAIL=`echo $MNT_MAIL|tr a-z n-za-m`
-PKG_BUGREPORT="$MNT_NAME <$MNT_MAIL>"
+[ -d .git ] && pkg_verstr=`git describe --always`
+pkg_major=`expr "$pkg_verstr" : 'v\([0-9]*\)\.[0-9]*'`
+pkg_minor=`expr "$pkg_verstr" : 'v[0-9]*\.\([0-9]*\)'`
+pkg_string="$pkg_name $pkg_verstr"
 
 # Miscellaneous substitutions
-CUSTSUBS="s/@PKG_NAME@/$PKG_NAME/g
-s/@PKG_VERSION@/"0x$PKG_MAJOR${PKG_MINOR}"/g
-s/@PKG_VERSTR@/$PKG_VERSTR/g
-s/@PKG_STRING@/$PKG_STRING/g
-s/@PKG_UNAME@/`echo $PKG_NAME|tr a-z A-Z`/g
-s/@PKG_BUGREPORT@/$PKG_BUGREPORT/g
-s/@PKG_MAJOR@/$PKG_MAJOR/g
-s/@PKG_MINOR@/$PKG_MINOR/g"
+custsubs="s/@pkg_name@/$pkg_name/g
+s/@pkg_version@/0x$pkg_major$pkg_minor/g
+s/@pkg_verstr@/$pkg_verstr/g
+s/@pkg_string@/$pkg_string/g
+s/@pkg_uname@/`echo $pkg_name|tr a-z A-Z`/g
+s/@pkg_bugreport@/$pkg_bugreport/g
+s/@pkg_major@/$pkg_major/g
+s/@pkg_minor@/$pkg_minor/g"
 
 ######################################################################
-# The rest of the file is configuration code. Leave it alone.	     #
+#### The rest of the file is configuration code. Leave it alone. #####
 ######################################################################
 
 die() { rm -f config.sed; exit; }
-
-#### Compile the configurator and generate initial config.sed ########
-
-if [ -z "$CC" ]; then
-    for i in gcc clang cc; do
-	CC=`which $i 2>/dev/null` && break
-    done
-fi
-[ -z "$CC" ] && "No C compiler found" && die
-
-#### Set host-dependent options ######################################
-
-SYSNAME=`uname|tr A-Z a-z`
-case "$SYSNAME" in
-    *solaris*| *sun*)	SYSNAME="sun";;
-    *darwin*| *osx*)	SYSNAME="mac";;
-    *bsd*)		SYSNAME="bsd";;
-    *)			SYSNAME="linux";;
-esac
-
-if [ "$SYSNAME" = "sun" ]; then
-    echo "s/-Wredundant-decls/-Wno-redundant-decls/g" >config.sed
-elif [ "$SYSNAME" = "bsd" ]; then
-    echo 's/-Wredundant-decls/-Wno-redundant-decls/g
-	s/-Winline/-Wno-inline/g' >config.sed
-elif [ ! "$SYSNAME" = "linux" ]; then
-    echo 's/-p --ignore-fail-on-non-empty//g' >config.sed
-fi
-if [ "$SYSNAME" = "mac" ]; then
-    echo 's/@SYSWARNS@/-Wno-long-double/g'
-else
-    echo 's/ \?@SYSWARNS@//g' >>config.sed
-fi
+sub() { printf "%s\n" "$1">>config.sed; }
+escpath() { echo $1 | sed 's/\//\\\//g'; }
 
 #### Printing helper functions #######################################
 
-PrintComponents() {
+print_components() {
     local cc name desc
-    cc=$COMPONENTS
+    cc=$components
     echo "Options:"
     while [ ! -z "$cc" ]; do
 	name=`expr "$cc" : '[^}]*name=\[\([^]]*\)\]'`
@@ -101,50 +67,49 @@ PrintComponents() {
     echo
 }
 
-PrintHelp() {
-    echo "This program configures $PKG_STRING
+print_help() {
+    echo "This program configures $pkg_string build system.
 
-Usage: configure [OPTION]...
+Usage: configure [option]...
 
 Configuration:
-  -h, --help		display this help
-  -V, --version		display version
+  -h, --help		display this help and exit
+  -V, --version		display version information and exit
 
 Installation directories:
-  --prefix=PREFIX	installation root [/usr/local]
-  --bindir=DIR		programs [PREFIX/bin]
-  --sbindir=DIR		admin programs [PREFIX/sbin]
-  --datadir=DIR		data [PREFIX/share]
-  --sysconfdir=DIR	configuration [PREFIX/etc]
-  --localstatedir=DIR	modifiable data [PREFIX/var]
-  --includedir=DIR	header files [PREFIX/include]
-  --libdir=DIR		libraries [PREFIX/lib]
-  --infodir=DIR		info docs [PREFIX/info]
-  --mandir=DIR		man pages [PREFIX/man]
-  --builddir=DIR	location for compiled objects [/tmp/$USER/make]
+  --prefix=dir		architecture-independent root [/usr/local]
+  --sbindir=dir		admin executable dir [/sbin]
+  --datadir=dir		architecture-independent data dir [prefix/share]
+  --mandir=dir		man page root [datadir/man]
+  --man1dir=dir		man 1 page root [mandir/man1]
+  --sysconfdir=dir	system configuration dir [/etc]
+  --pamdir=dir		PAM configuration [sysconfdir/pam.d]
+  --libdir=dir		object code libraries [prefix/lib]
+  --sysddir=dir		systemd configuration [libdir/systemd/system]
+  --builddir=dir	location for compiled objects [\$TMPDIR/make]
 "
-    PrintComponents
-    echo "Report bugs to $PKG_BUGREPORT."
+    print_components
+    echo "Report bugs to $pkg_bugreport"
 }
 
-PrintVersion() {
-    echo "$PKG_NAME configure $PKG_VERSTR"
+print_version() {
+    echo "$pkg_name $pkg_verstr configure"
 }
 
-SubVar() {
+sub_var() {
     local esc2
-    esc2=`echo $2 | sed 's/\//\\\&/g'`
+    esc2=`escpath $2`
     eval ac_var_$1='$esc2';
-    echo "s/@$1@/$esc2/g" >>config.sed
+    sub "s/@$1@/$esc2/g"
 }
 
-SubComp() {
+sub_comp() {
     local cc name seds
-    cc=$COMPONENTS
+    cc=$components
     while [ ! -z "$cc" ]; do
 	name=`expr "$cc" : '[^}]*name=\[\([^]]*\)\]'`
 	seds=`expr "$cc" : '[^}]*seds=\[\([^]]*\)\]'`
-	[ "$name" = "$1" ] && echo $seds >>config.sed
+	[ "$name" = "$1" ] && sub "$seds"
 	cc=`expr "$cc" : '[^}]*}\(.*\)'`
     done
 }
@@ -152,101 +117,75 @@ SubComp() {
 for i in $*; do
     case $i in
 	--)		break;;
-	--version |-V)	PrintVersion && die;;
-	--help |-h |-?)	PrintHelp && die;;
-	--*=*)		SubVar `expr "$i" : '--\([^=]*\)='` `expr "$i" : '[^=]*=\(.*\)'`;;
-	--*)		SubComp `expr "$i" : '--\(.*\)'`;;
+	--version |-V)	print_version && die;;
+	--help |-h |-?)	print_help && die;;
+	--*=*)		sub_var `expr -- "$i" : '--\([^=]*\)='` `expr -- "$i" : '[^=]*=\(.*\)'`;;
+	--*)		sub_comp `expr -- "$i" : '--\(.*\)'`;;
 	*)		echo "Error: unrecognized option \"$i\"" && die;;
     esac
 done
 
 #### Set directory prefixes ##########################################
 
-echo "s/@prefix@/${ac_var_prefix:=\/usr}/g
-s/@bindir@/$ac_var_prefix\/bin/g
-s/@sbindir@/\/sbin/g
-s/@datarootdir@/${ac_var_datarootdir:=$ac_var_prefix\/share}/g
-s/@datadir@/$ac_var_datarootdir/g
-s/@sysconfdir@/\/etc/g
-s/@localstatedir@/$ac_var_prefix\/var/g
-s/@includedir@/${ac_var_includedir:=$ac_var_prefix\/include}/g
-s/@docdir@/${ac_var_docdir:=$ac_var_datarootdir\/doc\/$PKG_NAME}/g
-s/@infodir@/$ac_var_datarootdir\/info/g
-s/@libdir@/${ac_var_libdir:=$ac_var_prefix\/lib}/g
-s/@mandir@/$ac_var_datarootdir\/man/g
-s/@builddir@/\/tmp\/$USER\/make/g
-s/@customincdir@/${ac_var_customincdir:=$ac_var_prefix\/include}/g
-s/@customlibdir@/${ac_var_customlibdir:=$ac_var_prefix\/lib}/g" >>config.sed
-
-if [ "$ac_var_prefix" != "\/usr\/local" -a "$ac_var_prefix" != "\/usr" ]; then
-    echo "s/ \?@CUSTOMINCDIR@/ -I$ac_var_customincdir/g
-s/ \?@CUSTOMLIBDIR@/ -L$ac_var_customlibdir/g" >>config.sed
-else
-    echo "s/ \?@CUSTOMINCDIR@//g
-s/ \?@CUSTOMLIBDIR@//g" >>config.sed
-fi
+sub "s/@prefix@/${ac_var_prefix:=\/usr\/local}/g
+s/@sbindir@/${ac_var_sbindir:=\/sbin}/g
+s/@datadir@/${ac_var_datadir:=\$\{prefix\}\/share}/g
+s/@mandir@/${ac_var_mandir:=\$\{datadir\}\/man}/g
+s/@man1dir@/${ac_var_man1dir:=\$\{mandir\}\/man1}/g
+s/@sysconfdir@/${ac_var_includedir:=\/etc}/g
+s/@pamdir@/${ac_var_pamdir:=\$\{sysconfdir\}\/pam.d}/g
+s/@libdir@/${ac_var_libdir:=\$\{prefix\}\/lib}/g
+s/@sysddir@/${ac_var_sysddir:=\$\{libdir\}\/systemd\/system}/g
+s/@TMPDIR@/$(escpath ${TMPDIR:-/tmp})/g
+s/@builddir@/\$\{TMPDIR\}\/make/g
+s/@pkgconfigdir@/${ac_var_pkgconfigdir:=\$\{libdir\}\/pkgconfig}/g"
 
 #### Find headers, libs, programs, and subs ##########################
 
-SubHeadLibsProgs() {
-local INCPATH LIBPATH LIBSUFFIX found pname pcall esciv
-INCPATH="$ac_var_includedir $ac_var_customincdir /usr/include /usr/include/x86_64-linux-gnu"
-INCPATH=`echo $INCPATH | sed 's/\\\\//g'`
-for i in $HEADERS; do
-    for p in $INCPATH; do
-	if [ -r "$p/$i" ]; then
-	    echo 's/#undef \(HAVE_'`echo $i|tr a-z/.- A-Z___`'\)/#define \1 1/' >>config.sed
-	    break
-	fi
-    done
-done
-
-LIBPATH="`echo $LD_LIBRARY_PATH | tr ':' ' '` $ac_var_libdir $ac_var_customlibdir /usr/lib /usr/local/lib /lib /usr/lib/x86_64-linux-gnu"
-LIBPATH=`echo $LIBPATH | sed 's/\\\\//g'`
-LIBSUFFIX="so a la dylib"
-for i in $LIBS; do
-    found=
-    for p in $LIBPATH; do
-	for s in $LIBSUFFIX; do
-	    if [ -r "$p/lib$i.$s" ]; then
-		found=" -l$i"
-		break
-	    fi
-	done
-	[ -z "$found" ] || break
-    done
-    echo "s/ \?@lib$i@/$found/g" >>config.sed
-done
-
-for i in $PROGS; do
+# Programs found using which
+for i in $progs; do
     pname=`expr "$i" : '\([^=]*\)=[^=]*'`
     pcall=`expr "$i" : '[^=]*=\([^=]*\)'`
-    esciv="`eval echo \$\{$pname\}|sed 's/\//\\\\\//g'`"
+    ppath=`eval echo \$\{$pname\}`
+    ppath=`escpath "$ppath"`
     # First check if an environment variable is set
-    [ ! -z "$esciv" ] && echo "s/@$pname@/$esciv/g" >>config.sed
+    [ ! -z "$ppath" ] && sub "s/@$pname@/$ppath/g"
     # Check if the program exists
-    [ -x `which $pcall 2>/dev/null` ] && echo "s/@$pname@/$pcall/g" >>config.sed
+    ppath=`which $pcall 2>/dev/null`
+    [ ! -z "$ppath" -a -x "$ppath" ] && sub "s/@$pname@/$pcall/g"
 done
-# If nothing found in first loop, set the first pair anyway.
-for i in $PROGS; do
+# If nothing found in first loop, set the first pair anyway
+for i in $progs; do
     pname=`expr "$i" : '\([^=]*\)=[^=]*'`
     pcall=`expr "$i" : '[^=]*=\([^=]*\)'`
-    echo "s/@$pname@/$pcall/g" >>config.sed
+    sub "s/@$pname@/$pcall/g"
 done
 
-# And, finally, the environment variables
-for i in $ENVIRONS; do
-    esciv="`eval echo '"'\$\{$i\}'"'|sed 's/\//\\\&/g'`"
-    [ ! -z "$esciv" ] && esciv=" $esciv"
-    echo "s/ \?@$i@/$esciv/g" >>config.sed
+# Packages found using pkg-config
+pkgconfig=`which pkg-config 2>/dev/null`
+if [ -z "$pkgconfig" -o ! -x "$pkgconfig" ]; then
+    echo "Error: could not find pkg-config"; die
+fi
+faildeps=""
+for i in $pkgs; do
+    `$pkgconfig --exists $i` || faildeps="$i $faildeps"
 done
-echo "$CUSTSUBS" >>config.sed
-}
-SubHeadLibsProgs
+if [ ! -z "$faildeps" ]; then
+    echo "Error: missing required packages: $faildeps"; die
+fi
+pkgcflags=$(escpath "$($pkgconfig --cflags $pkgs)")
+pkglibs=$(escpath "$($pkgconfig --libs-only-l $pkgs)")
+pkgldflags=$(escpath "$($pkgconfig --libs-only-L --libs-only-other $pkgs)")
+sub "s/@pkgcflags@/$pkgcflags/"
+sub "s/@pkglibs@/$pkglibs/"
+sub "s/@pkgldflags@/$pkgldflags/"
+
+# Miscellaneous custom substitutions
+sub "$custsubs"
 
 #### Apply substitutions to all files ################################
 
-for i in $FILES; do
+for i in $files; do
     sed -f config.sed $i.in > $i
 done
 

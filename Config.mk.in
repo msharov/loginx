@@ -1,40 +1,38 @@
-################ Build options #######################################
-
-NAME		:= @PKG_NAME@
-MAJOR		:= @PKG_MAJOR@
-MINOR		:= @PKG_MINOR@
-
-#DEBUG		:= 1
+name		:= @pkg_name@
 
 ################ Programs ############################################
 
 CC		:= @CC@
-LD		:= @CC@
 INSTALL		:= @INSTALL@
-
-INSTALLEXE	:= ${INSTALL} -D -p -m 700 -o root -g root -s
-INSTALLDATA	:= ${INSTALL} -D -p -m 644 -o root -g root
-RMPATH		:= rmdir -p --ignore-fail-on-non-empty
+INSTALL_DATA	:= ${INSTALL} -m 644
+INSTALL_PROGRAM	:= ${INSTALL} -m 700 -o root -g root -s
 
 ################ Destination #########################################
 
-BINDIR		:= @sbindir@
-MANDIR		:= @mandir@
-PAMDIR		:= @sysconfdir@/pam.d
-SYSDDIR		:= @libdir@/systemd/system
+prefix		:= @prefix@
+sbindir		:= @sbindir@
+sysconfdir	:= @sysconfdir@
+pamdir		:= @pamdir@
+libdir		:= @libdir@
+sysddir		:= @sysddir@
+datadir		:= @datadir@
+mandir		:= @mandir@
+man1dir		:= @man1dir@
+TMPDIR		:= @TMPDIR@
+builddir	:= @builddir@/${name}
+O		:= .o/
 
 ################ Compiler options ####################################
 
-WARNOPTS	:= -Wall -Wextra -Wredundant-decls -Wshadow @SYSWARNS@
-CFLAGS		:= ${WARNOPTS} @CUSTOMINCDIR@ -std=c99 \
-		-ffunction-sections -fdata-sections
-LDFLAGS		:= @CUSTOMLIBDIR@
-LIBS		:= @libpam@ @libncurses@
-ifdef DEBUG
-    CFLAGS	+= -O0 -g
+#debug		:= 1
+libs		:= @pkglibs@ -lpam
+ifdef debug
+    cxxflags	:= -O0 -ggdb3
+    ldflags	:= -g -rdynamic
 else
-    CFLAGS	+= -Os -g0 -DNDEBUG=1
-    LDFLAGS	+= -s -Wl,-O1,-gc-sections
+    cxxflags	:= -Os -g0 -DNDEBUG=1
+    ldflags	:= -s
 endif
-BUILDDIR	:= @builddir@/${NAME}
-O		:= .o/
+CXXFLAGS	:= -Wall -Wextra -Wredundant-decls -Wshadow
+cxxflags	+= -std=c11 @pkgcflags@ ${CXXFLAGS}
+ldflags		+= @pkgldflags@ ${LDFLAGS}

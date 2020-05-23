@@ -30,7 +30,7 @@ char _ttypath [16];
 
 #define S(s) (1u<<(s))
 enum {
-    sigset_Quit	= S(SIGINT)|S(SIGQUIT)|S(SIGTERM)|S(SIGPWR)|
+    sigset_Quit	= S(SIGINT)|S(SIGQUIT)|S(SIGTERM)|
 		S(SIGILL)|S(SIGABRT)|S(SIGBUS)|S(SIGFPE)|
 		S(SIGSYS)|S(SIGSEGV)|S(SIGALRM)|S(SIGXCPU),
     qc_ShellSignalQuitOffset = 128

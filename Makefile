@@ -2,92 +2,147 @@
 
 ################ Source files ##########################################
 
-EXE	:= $O${NAME}
-SRCS	:= $(wildcard *.c)
-OBJS	:= $(addprefix $O,$(SRCS:.c=.o))
-DEPS	:= ${OBJS:.o=.d}
-CONFS	:= Config.mk config.h
-ONAME   := $(notdir $(abspath $O))
+exe	:= $O${name}
+srcs	:= $(wildcard *.c)
+objs	:= $(addprefix $O,$(srcs:.c=.o))
+deps	:= ${objs:.o=.d}
+confs	:= Config.mk config.h
+oname   := $(notdir $(abspath $O))
 
 ################ Compilation ###########################################
 
+.SUFFIXES:
 .PHONY: all clean distclean maintainer-clean
 
-all:	Config.mk config.h ${EXE}
+all:	${exe}
 
-${EXE}:	${OBJS}
+${exe}:	${objs}
 	@echo "Linking $@ ..."
-	@${LD} ${LDFLAGS} -o $@ $^ ${LIBS}
+	@${CC} ${ldflags} -o $@ $^ ${libs}
 
 $O%.o:	%.c
 	@echo "    Compiling $< ..."
-	@[ -d $(dir $@) ] || mkdir -p $(dir $@)
-	@${CC} ${CFLAGS} -MMD -MT "$(<:.c=.s) $@" -o $@ -c $<
+	@${CC} ${cflags} -MMD -MT "$(<:.c=.s) $@" -o $@ -c $<
 
 %.s:	%.c
 	@echo "    Compiling $< to assembly ..."
-	@${CC} ${CFLAGS} -S -o $@ -c $<
+	@${CC} ${cflags} -S -o $@ -c $<
 
 ################ Installation ##########################################
 
-.PHONY:	install uninstall
+.PHONY:	install installdirs
+.PHONY: uninstall uninstall-man uninstall-pam uninstall-svc
 
-ifdef BINDIR
-EXEI	:= ${BINDIR}/${NAME}
-PAMCNFI	:= ${PAMDIR}/${NAME}
-SYSDCFI	:= ${SYSDDIR}/${NAME}@.service
-MANI	:= ${MANDIR}/man1/${NAME}.1.gz
+ifdef sbindir
+exed	:= ${DESTDIR}${sbindir}
+exei	:= ${exed}/$(notdir ${exe})
 
-install:	${EXEI} ${PAMCNFI} ${SYSDCFI} ${MANI}
+${exed}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${exei}:	${exe} | ${exed}
+	@echo "Installing $@ ..."
+	@${INSTALL_PROGRAM} $< $@
 
-${EXEI}:	${EXE}
-	@echo "Installing $< as $@ ..."
-	@${INSTALLEXE} $< $@
-
-${PAMCNFI}:	conf/${NAME}
-	@echo "Installing PAM configuration file ..."
-	@${INSTALLDATA} $< $@
-
-${SYSDCFI}:	conf/${NAME}@.service
-	@echo "Installing systemd service file ..."
-	@${INSTALLDATA} $< $@
-
-${MANI}:	conf/${NAME}.1
-	@echo "Installing man page ..."
-	@gzip -9 -c $< > $@
-	@chmod 644 $@
-
+installdirs:	${exed}
+install:	${exei}
 uninstall:
-	@echo "Uninstalling ${NAME} ..."
-	@rm -f ${EXEI} ${PAMCNFI} ${SYSDCFI} ${MANI}
+	@if [ -f ${exei} ]; then\
+	    echo "Removing ${exei} ...";\
+	    rm -f ${exei};\
+	fi
+endif
+ifdef man1dir
+mand	:= ${DESTDIR}${man1dir}
+mani	:= ${mand}/${name}.1
+
+${mand}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${mani}:	conf/${name}.1 | ${mand}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+
+installdirs:	${mand}
+install:	${mani}
+uninstall:	uninstall-man
+uninstall-man:
+	@if [ -f ${mani} ]; then\
+	    echo "Removing ${mani} ...";\
+	    rm -f ${mani};\
+	fi
+endif
+ifdef pamdir
+pamd	:= ${DESTDIR}${pamdir}
+pami	:= ${pamd}/${name}
+
+${pamd}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${pami}:	conf/${name} | ${pamd}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+
+installdirs:	${pamd}
+install:	${pami}
+uninstall:	uninstall-pam
+uninstall-pam:
+	@if [ -f ${pami} ]; then\
+	    echo "Removing ${pami} ...";\
+	    rm -f ${pami};\
+	fi
+endif
+ifdef sysddir
+svcd	:= ${DESTDIR}${sysddir}
+svci	:= ${svcd}/${name}@.service
+
+${svcd}:
+	@echo "Creating $@ ..."
+	@${INSTALL} -d $@
+${svci}:	conf/${name}@.service | ${svcd}
+	@echo "Installing $@ ..."
+	@${INSTALL_DATA} $< $@
+
+installdirs:	${svcd}
+install:	${svci}
+uninstall:	uninstall-svc
+uninstall-svc:
+	@if [ -f ${svci} ]; then\
+	    echo "Removing ${svci} ...";\
+	    rm -f ${svci};\
+	fi
 endif
 
 ################ Maintenance ###########################################
 
 clean:
-	@if [ -h ${ONAME} ]; then\
-	    rm -f ${EXE} ${OBJS} ${DEPS} $O.d ${ONAME};\
-	    ${RMPATH} ${BUILDDIR};\
+	@if [ -d ${builddir} ]; then\
+	    rm -f ${exe} ${objs} ${deps} $O.d;\
+	    rmdir ${builddir};\
 	fi
 
 distclean:	clean
-	@rm -f ${CONFS} config.status
+	@rm -f ${oname} ${confs} config.status
 
 maintainer-clean: distclean
 
-$O.d:   ${BUILDDIR}/.d
-	@[ -h ${ONAME} ] || ln -sf ${BUILDDIR} ${ONAME}
-${BUILDDIR}/.d:     Makefile
-	@mkdir -p ${BUILDDIR} && touch ${BUILDDIR}/.d
+$O.d:	${builddir}/.d
+	@[ -h ${oname} ] || ln -sf ${builddir} ${oname}
+$O%/.d:	$O.d
+	@[ -d $(dir $@) ] || mkdir $(dir $@)
+	@touch $@
+${builddir}/.d:	Makefile
+	@[ -d $(dir $@) ] || mkdir -p $(dir $@)
+	@touch $@
 
 Config.mk:	Config.mk.in
 config.h:	config.h.in
-${OBJS}:	Makefile ${CONFS} $O.d
-${CONFS}:	configure
-	@if [ -x config.status ]; then\
-	    echo "Reconfiguring ..."; ./config.status;\
-	else\
-	    echo "Running configure ..."; ./configure;\
+${objs}:	Makefile ${confs} $O.d
+${confs}:	configure
+	@if [ -x config.status ]; then echo "Reconfiguring ...";\
+	    ./config.status;\
+	else echo "Running configure ...";\
+	    ./configure;\
 	fi
 
--include ${DEPS}
+-include ${dep}
