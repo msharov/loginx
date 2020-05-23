@@ -1,11 +1,8 @@
-	+----------+
-	|  loginx  |
-	+----------+
+# loginx
 
-This is a combination of getty, login, and xinit for use on Linux
-console. While it is possible to use those directly, a single executable
-is simpler and can do a few extra things to require less typing during
-login.
+This is a combination of getty, login, and xinit for use on the Linux
+console. A single executable is simpler and can do a few extra things
+to require less typing during login.
 
 Features:
 
@@ -17,9 +14,11 @@ Features:
 - Will launch X if you have ~/.xinitrc or your login shell otherwise. If
   X fails to start, loginx falls back to the plain shell.
 
-Installation:
+loginx requires PAM, ncurses, and a c11-supporting compiler, gcc 4.6+:
 
+```sh
 ./configure && make install
+```
 
 Use it like you would getty. The command is "loginx tty1", and you'd add
 it to inittab, somewhere in rc.d, in a copy of systemd's getty@.service,
@@ -31,8 +30,11 @@ need to disable getty and display manager first.
 
 Rootless X is not supported, so on those systems you need to configure
 the wrapper by creating /etc/X11/Xwrapper.config with:
-    allowed_users = anybody
-    needs_root_rights = yes
+
+```ini
+allowed_users = anybody
+needs_root_rights = yes
+```
 
 Also, you'll need a valid PAM configuration file. make install will
 install one that ought to work. If not, copy /etc/pam.d/login to
