@@ -29,11 +29,23 @@ static void CleanupAccounts (void)
 
 static bool CanLogin (const struct passwd* pw)
 {
-    return pw->pw_shell && strcmp(pw->pw_shell, "/bin/false") && strcmp(pw->pw_shell,"/sbin/nologin");
+    if (!pw->pw_shell || strstr (pw->pw_shell, "nologin"))
+	return false;
+    setusershell();
+    const char* ushell = getusershell();
+    if (!ushell)
+	return true;	// /etc/shells missing - allow all shells
+    do {
+	if (!strcmp (pw->pw_shell, ushell))
+	    return true;
+    } while ((ushell = getusershell()));
+    return false;
 }
 
 acclist_t ReadAccounts (void)
 {
+    assert (!_accts && "call ReadAccounts only once");
+
     _ttygroup = getgid();
     struct group* ttygr = getgrnam("tty");
     if (ttygr)	// If no tty group, use user's primary group
@@ -44,23 +56,24 @@ acclist_t ReadAccounts (void)
     setpwent();
     for (struct passwd* pw; (pw = getpwent());)
 	nac += CanLogin (pw);
-    _accts = (struct account**) xmalloc ((nac+1)*sizeof(struct account*));
+    _accts = xmalloc ((nac+1)*sizeof(struct account*));
     atexit (CleanupAccounts);
-    nac = 0;
+    unsigned iac = 0;
     setpwent();
-    for (struct passwd* pw; (pw = getpwent());) {
+    for (struct passwd* pw; iac < nac && (pw = getpwent());) {
 	if (!CanLogin (pw))
 	    continue;
-	_accts[nac] = (struct account*) xmalloc (sizeof(struct account));
-	_accts[nac]->uid = pw->pw_uid;
-	_accts[nac]->gid = pw->pw_gid;
-	_accts[nac]->name = strdup (pw->pw_name);
-	_accts[nac]->dir = strdup (pw->pw_dir);
-	_accts[nac]->shell = strdup (pw->pw_shell);
-	++nac;
+	_accts[iac] = (struct account*) xmalloc (sizeof(struct account));
+	_accts[iac]->uid = pw->pw_uid;
+	_accts[iac]->gid = pw->pw_gid;
+	_accts[iac]->name = strdup (pw->pw_name);
+	_accts[iac]->dir = strdup (pw->pw_dir);
+	_accts[iac]->shell = strdup (pw->pw_shell);
+	++iac;
     }
+    _naccts = iac;
     endpwent();
-    _naccts = nac;
+    endusershell();
     return (acclist_t) _accts;
 }
 

@@ -27,12 +27,12 @@ O		:= .o/
 #debug		:= 1
 libs		:= @pkglibs@ -lpam
 ifdef debug
-    cxxflags	:= -O0 -ggdb3
+    cflags	:= -O0 -ggdb3
     ldflags	:= -g -rdynamic
 else
-    cxxflags	:= -Os -g0 -DNDEBUG=1
+    cflags	:= -Os -g0 -DNDEBUG=1
     ldflags	:= -s
 endif
-CXXFLAGS	:= -Wall -Wextra -Wredundant-decls -Wshadow
-cxxflags	+= -std=c11 @pkgcflags@ ${CXXFLAGS}
+CFLAGS		:= -Wall -Wextra -Wredundant-decls -Wshadow
+cflags		+= -std=c11 @pkgcflags@ ${CFLAGS}
 ldflags		+= @pkgldflags@ ${LDFLAGS}
