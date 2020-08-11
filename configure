@@ -28,6 +28,11 @@ progs="CC=gcc CC=clang CC=cc INSTALL=install"
 # Required dependencies
 pkgs="ncurses"
 
+# Default pkg flags to substitute when pkg-config is not found
+pkg_libs="-lncurses"
+pkg_cflags=""
+pkg_ldflags=""
+
 # Automatic vars
 [ -d .git ] && pkg_verstr=`git describe --always`
 pkg_major=`expr "$pkg_verstr" : 'v\([0-9]*\)\.[0-9]*'`
@@ -163,22 +168,21 @@ done
 
 # Packages found using pkg-config
 pkgconfig=`which pkg-config 2>/dev/null`
-if [ -z "$pkgconfig" -o ! -x "$pkgconfig" ]; then
-    echo "Error: could not find pkg-config"; die
+if [ ! -z "$pkgconfig" -a -x "$pkgconfig" ]; then
+    faildeps=""
+    for i in $pkgs; do
+	`$pkgconfig --exists $i` || faildeps="$i $faildeps"
+    done
+    if [ ! -z "$faildeps" ]; then
+	echo "Error: missing required packages: $faildeps"; die
+    fi
+    pkg_cflags=$(escpath "$($pkgconfig --cflags $pkgs)")
+    pkg_libs=$(escpath "$($pkgconfig --libs-only-l $pkgs)")
+    pkg_ldflags=$(escpath "$($pkgconfig --libs-only-L --libs-only-other $pkgs)")
 fi
-faildeps=""
-for i in $pkgs; do
-    `$pkgconfig --exists $i` || faildeps="$i $faildeps"
-done
-if [ ! -z "$faildeps" ]; then
-    echo "Error: missing required packages: $faildeps"; die
-fi
-pkgcflags=$(escpath "$($pkgconfig --cflags $pkgs)")
-pkglibs=$(escpath "$($pkgconfig --libs-only-l $pkgs)")
-pkgldflags=$(escpath "$($pkgconfig --libs-only-L --libs-only-other $pkgs)")
-sub "s/@pkgcflags@/$pkgcflags/"
-sub "s/@pkglibs@/$pkglibs/"
-sub "s/@pkgldflags@/$pkgldflags/"
+sub "s/@pkg_cflags@/$pkg_cflags/"
+sub "s/@pkg_libs@/$pkg_libs/"
+sub "s/@pkg_ldflags@/$pkg_ldflags/"
 
 # Miscellaneous custom substitutions
 sub "$custsubs"

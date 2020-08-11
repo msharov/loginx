@@ -25,7 +25,7 @@ O		:= .o/
 ################ Compiler options ####################################
 
 #debug		:= 1
-libs		:= @pkglibs@ -lpam
+libs		:= @pkg_libs@ -lpam
 ifdef debug
     cflags	:= -O0 -ggdb3
     ldflags	:= -g -rdynamic
@@ -34,5 +34,5 @@ else
     ldflags	:= -s
 endif
 CFLAGS		:= -Wall -Wextra -Wredundant-decls -Wshadow
-cflags		+= -std=c11 @pkgcflags@ ${CFLAGS}
-ldflags		+= @pkgldflags@ ${LDFLAGS}
+cflags		+= -std=c11 @pkg_cflags@ ${CFLAGS}
+ldflags		+= @pkg_ldflags@ ${LDFLAGS}
