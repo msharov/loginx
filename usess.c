@@ -59,12 +59,19 @@ void RunSession (const struct account* acct)
 	return;
     WriteUtmp (acct, _shellpid, USER_PROCESS);
 
-    sigset_t smask;
-    sigprocmask (SIG_UNBLOCK, NULL, &smask);
+    sigset_t ssmask, ssorig;
+    sigemptyset (&ssmask);
+    sigaddset (&ssmask, SIGCHLD);
+    sigaddset (&ssmask, SIGTERM);
+    sigaddset (&ssmask, SIGQUIT);
+    sigaddset (&ssmask, SIGALRM);
+    sigaddset (&ssmask, SIGHUP);
+    sigprocmask (SIG_BLOCK, &ssmask, &ssorig);
 
     // Wait until the child processes quit or the term signal
     while (_shellpid || _xpid) {
-	sigsuspend (&smask);
+	sigsuspend (&ssorig);
+	sigprocmask (SIG_BLOCK, &ssmask, NULL);
 	if (_quitting) {
 	    if (_shellpid)
 		kill (_shellpid, _killsig);
@@ -72,6 +79,7 @@ void RunSession (const struct account* acct)
 		kill (_xpid, _killsig);
 	}
     }
+    sigprocmask (SIG_SETMASK, &ssorig, NULL);
 
     // Logout complete, note that shell is dead in utmp
     WriteUtmp (acct, _shellpid, DEAD_PROCESS);
@@ -261,29 +269,41 @@ static void WriteXauthority (const char* filename, unsigned dpy, const uint8_t* 
 
 static pid_t LaunchX (const struct account* acct)
 {
-    signal (SIGUSR1, XreadySignal);
+    // Block delivery of SIGUSR1 and other message signals
+    // until ready to avoid race conditions
+    sigset_t ssmask, ssorig;
+    sigemptyset (&ssmask);
+    sigaddset (&ssmask, SIGUSR1);
+    sigaddset (&ssmask, SIGCHLD);
+    sigaddset (&ssmask, SIGTERM);
+    sigaddset (&ssmask, SIGQUIT);
+    sigaddset (&ssmask, SIGALRM);
+    sigaddset (&ssmask, SIGHUP);
+    sigprocmask (SIG_BLOCK, &ssmask, &ssorig);
 
-    // Block delivery of SIGUSR1 until ready to avoid race conditions
-    sigset_t busr, orig;
-    sigemptyset (&busr);
-    sigaddset (&busr, SIGUSR1);
-    sigprocmask (SIG_BLOCK, &busr, &orig);
+    signal (SIGUSR1, XreadySignal);
 
     pid_t pid = fork();
     if (pid > 0) {
-	sigprocmask (SIG_SETMASK, &orig, NULL);	// Now unblock SIGUSR1
 	for (;;) {	// Wait for SIGUSR1 from X before returning
+	    sigsuspend (&ssorig);
+	    sigprocmask (SIG_BLOCK, &ssmask, NULL);
 	    int ecode, rc = waitpid (pid, &ecode, WNOHANG);
 	    if ((rc == pid && WIFEXITED(ecode)) || (rc < 0 && errno != EINTR)) {
 		_quitting = false;	//< try again with shell
 		syslog (LOG_ERR, "X pid %d failed to start, error %d, falling back to plain shell", pid, ecode);
-		return 0;
+		pid = 0;
+		break;
 	    } else if (_xready)
 		break;
-	    sleep (1);
 	}
+	sigprocmask (SIG_SETMASK, &ssorig, NULL);
 	return pid;
-    } else if (pid < 0)
+    }
+
+    // Child process or error, restore sigmask
+    sigprocmask (SIG_SETMASK, &ssorig, NULL);
+    if (pid < 0)
 	ExitWithError ("fork");
 
     // Child process; change to user and exec the X
@@ -294,7 +314,6 @@ static pid_t LaunchX (const struct account* acct)
     signal (SIGTTIN, SIG_IGN);	// Ignore server reads and writes
     signal (SIGTTOU, SIG_IGN);
     signal (SIGUSR1, SIG_IGN);	// This tells the X server to send SIGUSR1 to parent when ready
-    sigprocmask (SIG_SETMASK, &orig, NULL);	// Now unblock SIGUSR1
 
     char dpyname[] = ":0", vtname[] = "vt01";
     dpyname[1] += _xdisplay;
@@ -333,6 +352,6 @@ static pid_t LaunchShell (const struct account* acct, const char* arg)
     snprintf (shname, sizeof(shname), "-%s", shbasename);
 
     const char* argv[] = { shname, arg, NULL };
-    execvp (acct->shell, (char* const*) argv);
-    ExitWithError ("execvp");
+    execv (acct->shell, (char* const*) argv);
+    ExitWithError ("execv");
 }
