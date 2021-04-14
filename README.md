@@ -28,14 +28,6 @@ make install will by default install loginx@.service to the systemd
 system directory. Enable with "systemctl enable loginx@tty1". You may
 need to disable getty and display manager first.
 
-Rootless X is not supported, so on those systems you need to configure
-the wrapper by creating /etc/X11/Xwrapper.config with:
-
-```ini
-allowed_users = anybody
-needs_root_rights = yes
-```
-
 Also, you'll need a valid PAM configuration file. make install will
 install one that ought to work. If not, copy /etc/pam.d/login to
 /etc/pam.d/loginx.

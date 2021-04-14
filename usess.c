@@ -15,7 +15,7 @@ static void XreadySignal (int sig);
 static void ChildSignal (int sig);
 static void SetupUserResources (const struct account* acct);
 static void BecomeUser (const struct account* acct);
-static void RedirectToLog (void);
+static void RedirectToLog (const struct account* acct);
 static void WriteMotd (const struct account* acct);
 static void GenerateMCookie (uint8_t* cbuf);
 static void WriteXauthority (const char* filename, unsigned dpy, const uint8_t* mcookie);
@@ -189,20 +189,24 @@ static void BecomeUser (const struct account* acct)
 	perror ("chdir");
 }
 
-static void RedirectToLog (void)
+static void RedirectToLog (const struct account* acct)
 {
     close (STDIN_FILENO);
     if (STDIN_FILENO != open (_PATH_DEVNULL, O_RDONLY))
 	return;
 
     char logname [PATH_MAX];
-    snprintf (logname, sizeof(logname), "%s/xsession-errors", _usertmpdir);
-    int fd = open (logname, O_WRONLY| O_CREAT| O_APPEND, 0600);
+    unsigned lnl = snprintf (logname, sizeof(logname), "%s/xsession-errors", _usertmpdir);
+    if (lnl >= sizeof(logname))
+	return;
+
+    int fd = open (logname, O_WRONLY| O_CREAT| O_APPEND, S_IRUSR| S_IWUSR| S_IRGRP);
     if (fd < 0)
 	return;
     dup2 (fd, STDOUT_FILENO);
     dup2 (fd, STDERR_FILENO);
     close (fd);
+    chown (logname, acct->uid, acct->gid);
 }
 
 static void WriteMotd (const struct account* acct)
@@ -307,8 +311,7 @@ static pid_t LaunchX (const struct account* acct)
 	ExitWithError ("fork");
 
     // Child process; change to user and exec the X
-    BecomeUser (acct);
-    RedirectToLog();
+    RedirectToLog (acct);
     chdir ("/");
 
     signal (SIGTTIN, SIG_IGN);	// Ignore server reads and writes
@@ -341,7 +344,7 @@ static pid_t LaunchShell (const struct account* acct, const char* arg)
 	setenv ("DISPLAY", display, true);
 	setenv ("XAUTHORITY", _xauthpath, true);
 	setenv ("XDG_SESSION_TYPE", "x11", true);
-	RedirectToLog();
+	RedirectToLog (acct);
     }
     WriteMotd (acct);
 
