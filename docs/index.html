@@ -1,0 +1,66 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <meta http-equiv="Content-Type" content="text/xhtml+xml; charset=ISO-8859-1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>loginx - a console login replacement</title>
+    <meta name="Description" content="A login replacement with added getty and xinit functionality" />
+    <meta name="Keywords" content="login, console, getty, xinit, linux" />
+    <style type="text/css">
+	body { font-family: sans-serif; font-size: 13pt; color: #0b2; background-color: black; }
+	table { margin: 0 auto; max-width: 56em; border-spacing: 0px; border-collapse: collapse; }
+	td { border: 1px green solid; padding: 0 1.5em; }
+	#content { text-align: justify }
+	#screenshot { width: 13em }
+	#screenshot b { color: #0aa }
+	h1 { text-align: center }
+	a { color: #0bb }
+	a:visited { color: #289 }
+    </style>
+</head>
+<body>
+<table>
+<tr>
+    <td><h1>loginx</h1></td>
+    <td id="screenshot"><tt>
+	Username:&nbsp;<b>root</b><br/>
+	Password:&nbsp;<b>************</b>
+    </tt></td>
+</tr><tr><td colspan="2" id="content">
+<p>
+This is a combination of getty, login, and xinit for use on Linux
+console. While it is possible to use those directly, a single executable
+is simpler and can do a few extra things to require less typing during
+login. Features:
+</p><ul>
+<li>A curses-based login prompt. A nice thing to have for those of use who
+    do not want to use xdm but find getty a little bare.</li>
+<li>Remembers last login name so you don't have to type it every time. In
+    the login dialog press tab, up, or down, to cycle through available
+    usernames. Very convenient on a family PC where security is not
+    tight.</li>
+<li>Will launch X if you have <tt>~/.xinitrc</tt> or your login shell
+    otherwise. If X fails to start, loginx falls back to the plain shell.</li>
+</ul><p>
+Download: <a href="https://github.com/msharov/loginx/releases/latest">
+https://github.com/msharov/loginx/releases/latest
+</a><br/>
+Installation: <tt>./configure &amp;&amp; make install</tt>
+</p><p>
+Use it like you would getty. The command is <tt>loginx tty1</tt>,
+and you'd add it to inittab, somewhere in rc.d, in a copy of systemd's
+<tt>getty@.service</tt>, or whatever correct location your distribution's
+init system requires.
+</p><p>
+make install will by default install loginx@.service to the systemd
+system directory. Enable with <tt>systemctl enable loginx@tty1</tt>. You may
+need to disable getty and display manager first.
+</p><p>
+Also, you'll need a valid PAM configuration file. make install will
+install one that ought to work. If not, copy <tt>/etc/pam.d/login</tt> to
+<tt>/etc/pam.d/loginx</tt>.
+</p>
+</td></tr></table>
+</body>
+</html>
