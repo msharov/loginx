@@ -272,14 +272,15 @@ static pid_t LaunchX (const struct account* acct)
     pid_t pid = fork();
     if (pid > 0) {
 	sigprocmask (SIG_SETMASK, &orig, NULL);	// Now unblock SIGUSR1
-	for (;;) {
-	    sigsuspend (&orig);	// Wait for SIGUSR1 from X before returning
+	for (;;) {	// Wait for SIGUSR1 from X before returning
 	    int ecode, rc = waitpid (pid, &ecode, WNOHANG);
-	    if (rc == pid && WIFEXITED(ecode)) {
+	    if ((rc == pid && WIFEXITED(ecode)) || (rc < 0 && errno != EINTR)) {
+		_quitting = false;	//< try again with shell
 		syslog (LOG_ERR, "X pid %d failed to start, error %d, falling back to plain shell", pid, ecode);
 		return 0;
 	    } else if (_xready)
 		break;
+	    sleep (1);
 	}
 	return pid;
     } else if (pid < 0)
@@ -301,8 +302,8 @@ static pid_t LaunchX (const struct account* acct)
     const char* argv[] = { "X", dpyname, vtname, "-quiet", "-nolisten", "tcp", "-auth", _xauthpath, NULL };
     if (0 != access (argv[7], R_OK))
 	argv[6] = NULL;
-    execvp ("/usr/bin/X", (char* const*) argv);
-    ExitWithError ("execvp");
+    execv ("/usr/bin/X", (char* const*) argv);
+    ExitWithError ("execv");
 }
 
 static pid_t LaunchShell (const struct account* acct, const char* arg)
