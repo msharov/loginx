@@ -106,7 +106,7 @@ void ClearScreen (void)
 {
     if (!isatty (STDOUT_FILENO))
 	return;
-    // Clear the screen; [r resets scroll region, [H homes cursor, [J erases
-    #define RESET_SCREEN_CMD "\e[r\e[H\e[J"
+    // Clear the screen; c resets terminal, [r resets scroll region, [H homes cursor, [J erases
+    #define RESET_SCREEN_CMD "\ec\e[r\e[H\e[J"
     write (STDOUT_FILENO, RESET_SCREEN_CMD, sizeof(RESET_SCREEN_CMD));
 }
