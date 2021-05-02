@@ -24,4 +24,6 @@
 enum { KILL_TIMEOUT = 1 };
 
 // Using GNU-specific glibc features
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE 1
+#endif

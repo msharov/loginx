@@ -4,7 +4,7 @@
 ######################################################################
 
 pkg_name="loginx"
-pkg_verstr="v0.2"
+pkg_verstr="v1.1"
 pkg_bugreport="Mike Sharov <msharov@users.sourceforge.net>"
 
 # Files that get created by this script
